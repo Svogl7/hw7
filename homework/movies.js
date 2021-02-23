@@ -1,34 +1,69 @@
-window.addEventListener('DOMContentLoaded', async function(event) {
-  let db = firebase.firestore()
-  let apiKey = 'your TMDB API key'
-  let response = await fetch(`https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&language=en-US`)
-  let json = await response.json()
-  let movies = json.results
-  console.log(movies)
-  
-  for (let i=0; i<movies.length; i++) {
-    let movie = movies[i]
-    let docRef = await db.collection('watched').doc(`${movie.id}`).get()
-    let watchedMovie = docRef.data()
-    let opacityClass = ''
-    if (watchedMovie) {
-      opacityClass = 'opacity-20'
+//window.addEventListener('DOMContentLoaded', async function(event) {
+  firebase.auth().onAuthStateChanged(async function(user) {
+    let db = firebase.firestore()
+
+    if (user) {
+      console.log('user logged in')
+
+      db.collection('users').doc(user.uid).set({
+        name: user.displayName,
+        email: user.email
+      }) 
+
+      document.querySelector('.sign-in-or-sign-out').innerHTML = `
+        <p>Welcome ${user.displayName}</p>
+        <a href="#" class = "sign-out text-blue-500 underline">Sign Out</a>
+      `
+      document.querySelector('.sign-out').addEventListener('click', function(event) {
+        event.preventDefault()
+        firebase.auth().signOut()
+        document.location.href = 'movies.html'
+      })
+      
+
+      let apiKey = 'c70da2c8d7f253603a80b816bea81ac7'
+      let response = await fetch(`https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&language=en-US`)
+      let json = await response.json()
+      let movies = json.results
+      console.log(movies)
+
+      for (let i=0; i<movies.length; i++) {
+        let movie = movies[i]
+        let docRef = await db.collection('watched').doc(`${movie.id}-${user.uid}`).get()
+        let watchedMovie = docRef.data()
+        let opacityClass = ''
+        if (watchedMovie) {
+          opacityClass = 'opacity-20'
+        }
+    
+        document.querySelector('.movies').insertAdjacentHTML('beforeend', `
+          <div class="w-1/5 p-4 movie-${movie.id}-${user.uid} ${opacityClass}">
+            <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" class="w-full">
+            <a href="#" class="watched-button block text-center text-white bg-green-500 mt-4 px-4 py-2 rounded">I've watched this!</a>
+          </div>
+        `)
+    
+        document.querySelector(`.movie-${movie.id}-${user.uid}`).addEventListener('click', async function(event) {
+          event.preventDefault()
+          let movieElement = document.querySelector(`.movie-${movie.id}-${user.uid}`)
+          movieElement.classList.add('opacity-20')
+          await db.collection('watched').doc(`${movie.id}-${user.uid}`).set({})
+        }) 
+      }
+    } else {
+      console.log('no user')
+
+      let ui = new firebaseui.auth.AuthUI(firebase.auth())
+
+      let authUIConfig = {
+        signInOptions: [
+          firebase.auth.EmailAuthProvider.PROVIDER_ID
+        ],
+        signInSuccessUrl: 'movies.html'
+      }
+    
+      ui.start('.sign-in-or-sign-out', authUIConfig)
     }
-
-    document.querySelector('.movies').insertAdjacentHTML('beforeend', `
-      <div class="w-1/5 p-4 movie-${movie.id} ${opacityClass}">
-        <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" class="w-full">
-        <a href="#" class="watched-button block text-center text-white bg-green-500 mt-4 px-4 py-2 rounded">I've watched this!</a>
-      </div>
-    `)
-
-    document.querySelector(`.movie-${movie.id}`).addEventListener('click', async function(event) {
-      event.preventDefault()
-      let movieElement = document.querySelector(`.movie-${movie.id}`)
-      movieElement.classList.add('opacity-20')
-      await db.collection('watched').doc(`${movie.id}`).set({})
-    }) 
-  }
 })
 
 // Goal:   Refactor the movies application from last week, so that it supports
@@ -40,6 +75,8 @@ window.addEventListener('DOMContentLoaded', async function(event) {
 //         (provided) script tags for all necessary Firebase services – i.e. Firebase
 //         Auth, Firebase Cloud Firestore, and Firebase UI for Auth; also
 //         add the CSS file for FirebaseUI for Auth.
+
+
 // Step 2: Change the main event listener from DOMContentLoaded to 
 //         firebase.auth().onAuthStateChanged and include conditional logic 
 //         shows a login UI when signed, and the list of movies when signed
